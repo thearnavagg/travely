@@ -4,10 +4,16 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Plane, Map, Calendar, Star, ChevronRight, Menu } from "lucide-react";
 import { motion } from "framer-motion";
-import bgImage from "../assets/image.jpg"
+import bgImage from "../assets/image.jpg";
+import { Navigate, useNavigate } from "react-router-dom";
+
 
 export default function LandingPage() {
+  const navigate= useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
+  const handleClick = () => {
+    navigate("/travelbot");
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -56,6 +62,7 @@ export default function LandingPage() {
               <div className="space-x-4">
                 <Button
                   size="lg"
+                  onClick={handleClick}
                   className="bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   Get Started
