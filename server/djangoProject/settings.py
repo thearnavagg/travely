@@ -1,5 +1,8 @@
 import os
 from datetime import timedelta
+from decouple import config
+
+OPENAI_API_KEY = config('OPENAI_API_KEY')
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -19,6 +22,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'users',
+    'chatbot',
 ]
 
 MIDDLEWARE = [
