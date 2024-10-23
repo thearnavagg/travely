@@ -23,6 +23,7 @@ export function TravelBot() {
     `map-container-${Math.random().toString(36).substr(2, 9)}`
   );
   const markersRef = useRef([]);
+  const routesRef = useRef([]);
   const scriptRef = useRef(null);
 
   const cleanupMap = () => {
@@ -33,6 +34,13 @@ export function TravelBot() {
         }
       });
       markersRef.current = [];
+
+      routesRef.current.forEach((route) => {
+        if (route && typeof route.remove === "function") {
+          route.remove();
+        }
+      });
+      routesRef.current = [];
 
       mapRef.current.remove();
       mapRef.current = null;
@@ -67,13 +75,24 @@ export function TravelBot() {
         script.src =
           "https://apis.mappls.com/advancedmaps/api/" +
           import.meta.env.VITE_MAPPLS_API_KEY +
-          "/map_sdk?layer=vector&v=3.0&callback=initMap1";
+          "/map_sdk?layer=vector&v=3.0&libraries=direction";
         script.async = true;
         script.defer = true;
 
         script.onload = () => {
-          setTimeout(resolve, 1000);
+          const checkMapplsLoaded = setInterval(() => {
+            if (window.mappls) {
+              clearInterval(checkMapplsLoaded);
+              resolve();
+            }
+          }, 100);
+
+          setTimeout(() => {
+            clearInterval(checkMapplsLoaded);
+            reject(new Error("Timeout waiting for mappls to load"));
+          }, 10000);
         };
+
         script.onerror = reject;
 
         document.head.appendChild(script);
@@ -124,7 +143,7 @@ export function TravelBot() {
     };
   }, []);
 
-  const updateMapMarkers = (suggestions) => {
+  const updateMapMarkersAndRoutes = async (suggestions) => {
     if (!mapRef.current || !mapInitialized) {
       console.warn("Map not ready yet");
       return;
@@ -138,34 +157,111 @@ export function TravelBot() {
       });
       markersRef.current = [];
 
+      routesRef.current.forEach((route) => {
+        if (route && typeof route.remove === "function") {
+          route.remove();
+        }
+      });
+      routesRef.current = [];
+
       const bounds = new window.mappls.LatLngBounds();
+      const markerColors = [
+        "#FF5733",
+        "#33FF57",
+        "#3357FF",
+        "#FF33F1",
+        "#33FFF1",
+        "#F1FF33",
+      ];
 
-      suggestions.forEach((day) => {
-        day.locations.forEach((loc) => {
-          try {
-            const position = new window.mappls.LatLng(loc.lat, loc.lng);
-            bounds.extend(position);
+      for (const day of suggestions) {
+        const markerColor = markerColors[(day.day - 1) % markerColors.length];
 
-            const marker = new window.mappls.Marker({
-              map: mapRef.current,
-              position: position,
-              draggable: false,
-              popupHtml: `
+        for (let i = 0; i < day.locations.length; i++) {
+          const loc = day.locations[i];
+          const position = new window.mappls.LatLng(loc.lat, loc.lng);
+          bounds.extend(position);
+
+          const marker = new window.mappls.Marker({
+            map: mapRef.current,
+            position: position,
+            draggable: false,
+            html: `<div style="background-color: ${markerColor}; width: 30px; height: 30px; border-radius: 50%; display: flex; justify-content: center; align-items: center; color: white; font-weight: bold;">${day.day}</div>`,
+            popupOptions: {
+              content: `
                 <div style="padding: 10px;">
-                  <strong>${loc.name}</strong><br/>
+                  <strong>Day ${day.day}: ${loc.name}</strong><br/>
                   ${loc.time}
                 </div>
               `,
-              className: "custom-marker",
+              closeButton: true,
+              autoClose: false,
+            },
+          });
+
+          marker.addListener("click", function () {
+            marker.openPopup();
+          });
+
+          markersRef.current.push(marker);
+
+          // Draw route to next location
+          if (i < day.locations.length - 1) {
+            const nextLoc = day.locations[i + 1];
+            const routePromise = new Promise((resolve, reject) => {
+              // Calculate distance between the two locations
+              mappls.getDistance(
+                {
+                  coordinates: `${loc.lat},${loc.lng};${nextLoc.lat},${nextLoc.lng}`,
+                },
+                function (data) {
+                  if (data && data.results && data.results.length > 0) {
+                    const distance = data.results[0].distance; // Get distance in meters
+                    const travelTime = Math.round(
+                      data.results[0].duration / 60
+                    ); // Convert travel time to minutes
+                    loc.distanceToNext = `${(distance / 1000).toFixed(2)} km`;
+                    loc.travelTimeToNext = `${travelTime} minutes`;
+
+                    // Draw route on the map
+                    window.mappls.direction({
+                      map: mapRef.current,
+                      start: `${loc.lat},${loc.lng}`,
+                      end: `${nextLoc.lat},${nextLoc.lng}`,
+                      resource: "route",
+                      profile: "driving",
+                      rtype: 0,
+                      callback: function (routeData) {
+                        if (routeData.status === "success") {
+                          const route = new window.mappls.Polyline({
+                            map: mapRef.current,
+                            path: routeData.routes[0].geometry.coordinates,
+                            strokeColor: markerColor,
+                            strokeOpacity: 0.8,
+                            strokeWeight: 4,
+                          });
+                          routesRef.current.push(route);
+                          resolve();
+                        } else {
+                          reject(new Error("Route calculation failed"));
+                        }
+                      },
+                    });
+                  } else {
+                    reject(new Error("Distance calculation failed"));
+                  }
+                }
+              );
             });
 
-            marker.addPopup(marker.getPopup());
-            markersRef.current.push(marker);
-          } catch (err) {
-            console.error("Error creating marker:", err);
+            try {
+              await routePromise;
+            } catch (error) {
+              console.error("Error calculating distance or route:", error);
+            }
           }
-        });
-      });
+        }
+      }
 
       if (!bounds.isEmpty()) {
         mapRef.current.fitBounds(bounds, {
@@ -174,7 +270,7 @@ export function TravelBot() {
         });
       }
     } catch (error) {
-      console.error("Error updating markers:", error);
+      console.error("Error updating markers and routes:", error);
     }
   };
 
@@ -197,30 +293,46 @@ export function TravelBot() {
           },
         ],
       },
+      {
+        day: 2,
+        locations: [
+          {
+            name: "Qutub Minar",
+            lat: 28.524428,
+            lng: 77.185455,
+            time: "10:00 AM",
+          },
+          {
+            name: "Lotus Temple",
+            lat: 28.553501,
+            lng: 77.258824,
+            time: "01:00 PM",
+          },
+        ],
+      },
     ];
 
-    return {
-      text: "Here are my suggestions for your trip:",
-      suggestions,
-    };
-  };
-
-  const handleSend = async () => {
-    if (!input.trim()) return;
-
-    const newMessages = [...messages, { text: input, sender: "user" }];
-    setMessages(newMessages);
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      { role: "user", content: userMessage },
+    ]);
     setInput("");
 
-    const response = await generateResponse(input);
+    // Simulate an AI response
+    setTimeout(() => {
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { role: "bot", content: "Here are the suggestions for your trip!" },
+      ]);
 
-    setMessages([
-      ...newMessages,
-      { text: response.text, sender: "bot", suggestions: response.suggestions },
-    ]);
+      updateMapMarkersAndRoutes(suggestions);
+    }, 1000);
+  };
 
-    if (mapInitialized) {
-      updateMapMarkers(response.suggestions);
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (input.trim() !== "") {
+      generateResponse(input.trim());
     }
   };
 
@@ -232,113 +344,67 @@ export function TravelBot() {
   }, [messages]);
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen bg-gray-100 p-4 gap-4">
-      {/* Chat Section */}
-      <Card className="flex-1 flex flex-col">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card className="flex flex-col h-full">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageCircle className="w-5 h-5" />
-            TravelBot Chat
+          <CardTitle className="text-lg font-bold">
+            Travel Suggestion Bot
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 overflow-hidden">
-          <ScrollArea
-            className="h-[calc(100vh-12rem)] lg:h-[calc(100vh-16rem)]"
-            ref={chatContainerRef}
-          >
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`mb-4 flex ${
-                  message.sender === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
+        <CardContent className="flex-1">
+          <ScrollArea className="h-[400px]" ref={chatContainerRef}>
+            <div className="space-y-4">
+              {messages.map((message, index) => (
                 <div
-                  className={`flex items-start gap-2 max-w-[80%] ${
-                    message.sender === "user" ? "flex-row-reverse" : "flex-row"
+                  key={index}
+                  className={`flex ${
+                    message.role === "user" ? "justify-end" : "justify-start"
                   }`}
                 >
-                  <Avatar>
-                    <AvatarFallback>
-                      {message.sender === "user" ? "U" : "B"}
-                    </AvatarFallback>
-                    <AvatarImage
-                      src={
-                        message.sender === "user"
-                          ? "/placeholder.svg?height=40&width=40"
-                          : "/placeholder.svg?height=40&width=40"
-                      }
-                    />
-                  </Avatar>
+                  {message.role === "bot" && (
+                    <Avatar className="mr-2">
+                      <AvatarImage
+                        src="https://via.placeholder.com/40"
+                        alt="Bot"
+                      />
+                      <AvatarFallback>Bot</AvatarFallback>
+                    </Avatar>
+                  )}
                   <div
-                    className={`p-4 rounded-lg ${
-                      message.sender === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-secondary-foreground"
+                    className={`rounded-lg p-2 max-w-xs ${
+                      message.role === "user"
+                        ? "bg-blue-500 text-white"
+                        : "bg-gray-200 text-black"
                     }`}
                   >
-                    <p>{message.text}</p>
-                    {message.suggestions && (
-                      <div className="mt-2">
-                        {message.suggestions.map((day, dayIndex) => (
-                          <div key={dayIndex} className="mb-2">
-                            <h4 className="font-bold">Day {day.day}:</h4>
-                            {day.locations.map((loc, locIndex) => (
-                              <p key={locIndex}>
-                                {loc.time} - {loc.name}
-                              </p>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {message.content}
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </ScrollArea>
         </CardContent>
         <CardFooter>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSend();
-            }}
-            className="flex w-full items-center space-x-2"
-          >
+          <form className="w-full flex gap-2" onSubmit={handleSubmit}>
             <Input
               type="text"
+              placeholder="Ask for suggestions..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask for travel suggestions..."
-              className="flex-1"
             />
             <Button type="submit">
-              <Send className="w-4 h-4 mr-2" />
-              Send
+              <Send className="mr-2 h-4 w-4" /> Send
             </Button>
           </form>
         </CardFooter>
       </Card>
 
-      {/* Map Section */}
-      <Card className="flex-1 flex flex-col">
+      <Card className="h-full">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Map className="w-5 h-5" />
-            Trip Map
-          </CardTitle>
+          <CardTitle className="text-lg font-bold">Map Suggestions</CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 relative">
-          <div
-            id={mapContainerId.current}
-            className="absolute inset-0 rounded-lg"
-            style={{
-              minHeight: "400px",
-              width: "100%",
-              height: "100%",
-            }}
-          />
+        <CardContent className="h-[400px]">
+          <div id={mapContainerId.current} style={{ height: "100%" }}></div>
         </CardContent>
       </Card>
     </div>
