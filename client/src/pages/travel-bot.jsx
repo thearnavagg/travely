@@ -109,7 +109,7 @@ export function TravelBot() {
 
         if (!mapRef.current) {
           const map = new window.mappls.Map(mapContainerId.current, {
-            center: [28.6139, 77.209], // Delhi
+            center: [28.6139, 77.209],
             zoom: 12,
             search: false,
             zoomControl: true,
@@ -122,6 +122,7 @@ export function TravelBot() {
         }
       } catch (error) {
         console.error("Error initializing map:", error);
+        setMapLoaded(false);
       }
     };
 
@@ -138,8 +139,8 @@ export function TravelBot() {
   }, []);
 
   const updateMapMarkers = (suggestions) => {
-    if (!mapRef.current || !mapInitialized) {
-      console.warn("Map not ready yet");
+    if (!mapRef.current || !mapInitialized || !suggestions?.days) {
+      console.warn("Map not ready or no suggestions available");
       return;
     }
 
@@ -166,34 +167,36 @@ export function TravelBot() {
         const markerColor = markerColors[dayIndex % markerColors.length];
 
         day.locations.forEach((loc) => {
-          try {
-            const position = new window.mappls.LatLng(loc.lat, loc.lng);
-            bounds.extend(position);
+          if (loc.lat && loc.lng) {
+            try {
+              const position = new window.mappls.LatLng(loc.lat, loc.lng);
+              bounds.extend(position);
 
-            const marker = new window.mappls.Marker({
-              map: mapRef.current,
-              position: position,
-              draggable: false,
-              html: `<div style="background-color: ${markerColor}; width: 30px; height: 30px; border-radius: 50%; display: flex; justify-content: center; align-items: center; color: white; font-weight: bold;">${day.day}</div>`,
-              popupOptions: {
-                content: `
-                  <div style="padding: 10px;">
-                    <strong>Day ${day.day}: ${loc.name}</strong><br/>
-                    ${loc.time}
-                  </div>
-                `,
-                closeButton: true,
-                autoClose: false,
-              },
-            });
+              const marker = new window.mappls.Marker({
+                map: mapRef.current,
+                position: position,
+                draggable: false,
+                html: `<div style="background-color: ${markerColor}; width: 30px; height: 30px; border-radius: 50%; display: flex; justify-content: center; align-items: center; color: white; font-weight: bold;">${day.day}</div>`,
+                popupOptions: {
+                  content: `
+                    <div style="padding: 10px;">
+                      <strong>Day ${day.day}: ${loc.name}</strong><br/>
+                      ${loc.time || "Time not specified"}
+                    </div>
+                  `,
+                  closeButton: true,
+                  autoClose: false,
+                },
+              });
 
-            marker.addListener("click", function () {
-              marker.openPopup();
-            });
+              marker.addListener("click", function () {
+                marker.openPopup();
+              });
 
-            markersRef.current.push(marker);
-          } catch (err) {
-            console.error("Error creating marker:", err);
+              markersRef.current.push(marker);
+            } catch (err) {
+              console.error("Error creating marker:", err);
+            }
           }
         });
       });
@@ -222,22 +225,19 @@ export function TravelBot() {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API error: ${response.status} ${errorText}`);
+        throw new Error(`API error: ${response.status}`);
       }
 
       const data = await response.json();
 
-      if (
-        !data ||
-        !data.text ||
-        !data.suggestions ||
-        !Array.isArray(data.suggestions.days)
-      ) {
-        throw new Error("Invalid response format from API");
+      if (!data || typeof data.text !== "string") {
+        throw new Error("Invalid response format");
       }
 
-      return data;
+      return {
+        text: data.text,
+        suggestions: data.suggestions || { days: [] },
+      };
     } catch (error) {
       console.error("Error in generateResponse:", error);
 
@@ -251,15 +251,10 @@ export function TravelBot() {
           text: "Received invalid data from the server. Please try again.",
           suggestions: { days: [] },
         };
-      } else if (error.message.startsWith("API error:")) {
-        return {
-          text: "The server encountered an error. Please try again later.",
-          suggestions: { days: [] },
-        };
       }
 
       return {
-        text: "I'm sorry, I couldn't process your request. Please try again.",
+        text: "Sorry, I encountered an error. Please try again.",
         suggestions: { days: [] },
       };
     }
@@ -268,29 +263,26 @@ export function TravelBot() {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    const newMessages = [...messages, { text: input, sender: "user" }];
+    const userMessage = input.trim();
+    const newMessages = [...messages, { text: userMessage, sender: "user" }];
     setMessages(newMessages);
     setInput("");
     setIsLoading(true);
 
     try {
-      const response = await generateResponse(input);
+      const response = await generateResponse(userMessage);
 
-      if (response.suggestions && Array.isArray(response.suggestions.days)) {
-        setMessages([
-          ...newMessages,
-          {
-            text: response.text,
-            sender: "bot",
-            suggestions: response.suggestions,
-          },
-        ]);
+      setMessages([
+        ...newMessages,
+        {
+          text: response.text,
+          sender: "bot",
+          suggestions: response.suggestions,
+        },
+      ]);
 
-        if (mapInitialized && response.suggestions.days.length > 0) {
-          updateMapMarkers(response.suggestions);
-        }
-      } else {
-        throw new Error("Invalid suggestions format");
+      if (mapInitialized && response.suggestions?.days?.length > 0) {
+        updateMapMarkers(response.suggestions);
       }
     } catch (error) {
       console.error("Error in handleSend:", error);
@@ -309,16 +301,19 @@ export function TravelBot() {
 
   useEffect(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      chatContainerRef.current.scrollTop =
+        chatContainerRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
 
   const renderSuggestions = (suggestions) => {
+    if (!suggestions?.days?.length) return null;
+
     return suggestions.days.map((day, dayIndex) => (
       <div key={dayIndex} className="space-y-2">
         <div className="flex items-center gap-2">
-          <Badge 
-            variant="secondary" 
+          <Badge
+            variant="secondary"
             className="text-xs bg-blue-100 text-blue-700"
           >
             Day {day.day}
@@ -327,12 +322,12 @@ export function TravelBot() {
         </div>
         <div className="space-y-1.5 pl-2">
           {day.locations.map((loc, locIndex) => (
-            <div 
-              key={locIndex} 
+            <div
+              key={locIndex}
               className="text-sm flex items-start gap-2 hover:bg-gray-50 p-1 rounded transition-colors"
             >
               <span className="font-medium text-gray-600 min-w-[60px]">
-                {loc.time}
+                {loc.time || "Time not specified"}
               </span>
               <span className="text-gray-800">{loc.name}</span>
             </div>
@@ -356,7 +351,7 @@ export function TravelBot() {
             )}
           </CardTitle>
         </CardHeader>
-        
+
         <CardContent className="p-0">
           <ScrollArea className="h-[400px] p-4">
             <div ref={chatContainerRef} className="space-y-4">
@@ -377,8 +372,10 @@ export function TravelBot() {
                       p-4 rounded-lg shadow-sm max-w-[85%] transition-all duration-200 hover:shadow-md
                     `}
                   >
-                    <p className="text-sm leading-relaxed">{message.text}</p>
-                    {message.suggestions && (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {message.text}
+                    </p>
+                    {message.suggestions?.days?.length > 0 && (
                       <div className="mt-4 space-y-3">
                         {renderSuggestions(message.suggestions)}
                       </div>
@@ -390,7 +387,7 @@ export function TravelBot() {
                 <div className="flex justify-start">
                   <div className="bg-gray-100 text-gray-900 p-4 rounded-lg shadow-sm flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                    <span className="text-sm">Planning your journey...</span>
+                    <span className="text-sm">Processing your request...</span>
                   </div>
                 </div>
               )}
@@ -401,7 +398,7 @@ export function TravelBot() {
         <CardFooter className="border-t p-4 bg-gray-50">
           <div className="flex w-full gap-2">
             <Input
-              placeholder="Ask me about travel suggestions..."
+              placeholder="Ask me about travel suggestions or places..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
