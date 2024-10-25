@@ -5,7 +5,7 @@
 if [ -f "client/package.json" ]; then
    echo "Installing frontend dependencies..."
    npm install --prefix client
-   npm run build --prefix client
+   npm run dev --prefix client
 else
    echo "Frontend package.json not found"
 fi
