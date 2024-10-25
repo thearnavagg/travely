@@ -1,12 +1,10 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Plane, Map, Calendar, Star, ChevronRight, Menu } from "lucide-react";
 import { motion } from "framer-motion";
 import bgImage from "../assets/image.jpg";
-import { Navigate, useNavigate } from "react-router-dom";
-
+import {useNavigate } from "react-router-dom";
+import { Link } from "react-scroll";
 
 export default function LandingPage() {
   const navigate= useNavigate();
@@ -67,13 +65,15 @@ export default function LandingPage() {
                 >
                   Get Started
                 </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="bg-white text-primary hover:bg-white/90"
-                >
-                  Learn More
-                </Button>
+                <Link to="features" smooth={true} duration={500}>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="bg-white text-primary hover:bg-white/90"
+                  >
+                    Learn More
+                  </Button>
+                </Link>
               </div>
             </motion.div>
           </div>
@@ -181,6 +181,7 @@ export default function LandingPage() {
                 adventure.
               </p>
               <Button
+                onClick={handleClick}
                 size="lg"
                 className="bg-white text-primary hover:bg-white/90"
               >

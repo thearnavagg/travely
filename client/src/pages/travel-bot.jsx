@@ -19,6 +19,7 @@ export default function TravelBot() {
   const [isLoading, setIsLoading] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
+  const [mapError, setMapError] = useState(null);
   const chatContainerRef = useRef(null);
   const mapRef = useRef(null);
   const mapContainerId = useRef(
@@ -28,8 +29,11 @@ export default function TravelBot() {
   const scriptRef = useRef(null);
 
   const cleanupMap = () => {
+    console.log("Cleaning up map...");
     setMapLoaded(false);
     setMapInitialized(false);
+    setMapError(null);
+
     if (mapRef.current) {
       markersRef.current.forEach((marker) => {
         if (marker && typeof marker.remove === "function") {
@@ -44,6 +48,7 @@ export default function TravelBot() {
 
     const oldContainer = document.getElementById(mapContainerId.current);
     if (oldContainer) {
+      console.log("Removing old container and creating new one");
       const parent = oldContainer.parentElement;
       const newContainer = document.createElement("div");
       newContainer.id = mapContainerId.current;
@@ -59,34 +64,56 @@ export default function TravelBot() {
 
   const loadMapScript = () => {
     return new Promise((resolve, reject) => {
+      console.log("Loading map script...");
+
       if (window.mappls) {
+        console.log("Mappls already loaded");
         resolve();
+        return;
+      }
+
+      if (!import.meta.env.VITE_MAPPLS_API_KEY) {
+        const error = new Error("Mappls API key is not configured");
+        console.error(error);
+        setMapError("API key missing");
+        reject(error);
         return;
       }
 
       const script = document.createElement("script");
       script.src =
         "https://apis.mappls.com/advancedmaps/api/" +
-        process.env.VITE_MAPPLS_API_KEY +
+        import.meta.env.VITE_MAPPLS_API_KEY +
         "/map_sdk?layer=vector&v=3.0";
       script.async = true;
       script.defer = true;
 
-      script.onload = () => {
-        const checkMapplsLoaded = setInterval(() => {
-          if (window.mappls) {
-            clearInterval(checkMapplsLoaded);
-            resolve();
-          }
-        }, 100);
-
-        setTimeout(() => {
-          clearInterval(checkMapplsLoaded);
-          reject(new Error("Timeout waiting for mappls to load"));
-        }, 10000);
+      script.onerror = (error) => {
+        console.error("Map script failed to load:", error);
+        setMapError("Script loading failed");
+        reject(new Error("Failed to load map script"));
       };
 
-      script.onerror = reject;
+      script.onload = () => {
+        console.log("Script loaded, waiting for mappls object...");
+        let attempts = 0;
+        const maxAttempts = 50; 
+
+        const checkMapplsLoaded = setInterval(() => {
+          attempts++;
+          if (window.mappls) {
+            console.log("Mappls object detected");
+            clearInterval(checkMapplsLoaded);
+            resolve();
+          } else if (attempts >= maxAttempts) {
+            const error = new Error("Timeout waiting for mappls to load");
+            console.error(error);
+            setMapError("Loading timeout");
+            clearInterval(checkMapplsLoaded);
+            reject(error);
+          }
+        }, 100);
+      };
 
       document.head.appendChild(script);
       scriptRef.current = script;
@@ -95,49 +122,72 @@ export default function TravelBot() {
 
   const initMap = async () => {
     try {
+      console.log("Initializing map...");
       setMapLoaded(false);
-      await loadMapScript();
+      setMapError(null);
 
       const container = document.getElementById(mapContainerId.current);
       if (!container) {
         throw new Error("Map container not found");
       }
+      console.log("Map container found:", container);
+
+      await loadMapScript();
+
+      if (!window.mappls) {
+        throw new Error("Mappls SDK not loaded properly");
+      }
+      console.log("Mappls SDK loaded successfully");
 
       container.style.width = "100%";
       container.style.height = "100%";
       container.style.minHeight = "400px";
 
       if (!mapRef.current) {
-        const map = new window.mappls.Map(mapContainerId.current, {
-          center: [28.6139, 77.209],
-          zoom: 12,
-          search: false,
-          zoomControl: true,
-          location: true,
-        });
+        try {
+          console.log("Creating new map instance...");
+          const map = new window.mappls.Map(mapContainerId.current, {
+            center: [28.6139, 77.209],
+            zoom: 12,
+            search: false,
+            zoomControl: true,
+            location: true,
+          });
 
-        mapRef.current = map;
-        setMapInitialized(true);
+          map.on("load", () => {
+            console.log("Map loaded successfully");
+            setMapLoaded(true);
+            setMapError(null);
+          });
+
+          map.on("error", (error) => {
+            console.error("Map error:", error);
+            setMapLoaded(false);
+            setMapError("Map rendering error");
+          });
+
+          mapRef.current = map;
+          setMapInitialized(true);
+        } catch (error) {
+          console.error("Error creating map instance:", error);
+          setMapError("Map creation failed");
+          throw error;
+        }
       }
-      setMapLoaded(true);
     } catch (error) {
       console.error("Error initializing map:", error);
       setMapLoaded(false);
+      setMapError(error.message);
+      setMessages((prev) => [
+        ...prev,
+        {
+          text: `Failed to load map: ${error.message}. Please check your internet connection and try again.`,
+          sender: "bot",
+          suggestions: { days: [] },
+        },
+      ]);
     }
   };
-
-  useEffect(() => {
-    initMap();
-
-    return () => {
-      cleanupMap();
-      if (scriptRef.current && scriptRef.current.parentNode) {
-        scriptRef.current.parentNode.removeChild(scriptRef.current);
-        scriptRef.current = null;
-      }
-      setMapLoaded(false);
-    };
-  }, []);
 
   const updateMapMarkers = (suggestions) => {
     if (!mapRef.current || !mapInitialized || !suggestions?.days) {
@@ -146,6 +196,7 @@ export default function TravelBot() {
     }
 
     try {
+      console.log("Updating map markers...");
       markersRef.current.forEach((marker) => {
         if (marker && typeof marker.remove === "function") {
           marker.remove();
@@ -156,12 +207,12 @@ export default function TravelBot() {
       const bounds = new window.mappls.LatLngBounds();
 
       const markerColors = [
-        "#FF5733",
-        "#33FF57",
-        "#3357FF",
-        "#FF33F1",
-        "#33FFF1",
-        "#F1FF33",
+        "#FF5733", "#33FF57", "#3357FF", "#FF33F1", "#33FFF1",
+        "#F1FF33", "#F4A460", "#FA8072", "#FFD700", "#DDA0DD",
+        "#E6E6FA", "#FFF0F5", "#FF69B4", "#BA55D3", "#9370DB",
+        "#7B68EE", "#6A5ACD", "#483D8B", "#BC8F8F", "#D2691E",
+        "#FFB6C1", "#D8BFD8", "#DCDCDC", "#B0C4DE", "#5F9EA0",
+        "#4682B4", "#6495ED", "#00CED1", "#20B2AA", "#3CB371"
       ];
 
       suggestions.days.forEach((day, dayIndex) => {
@@ -300,12 +351,62 @@ export default function TravelBot() {
     }
   };
 
+  const handleNewChat = () => {
+    setMessages([
+      {
+        text: "Hello! I'm your travel assistant. Tell me your place to visit and for how many days you're planning your trip.",
+        sender: "bot",
+        suggestions: { days: [] },
+      },
+    ]);
+    setInput("");
+    if (!mapLoaded) {
+      setMapLoaded(false);
+      cleanupMap();
+      initMap();
+    } else {
+      markersRef.current.forEach((marker) => {
+        if (marker && typeof marker.remove === "function") {
+          marker.remove();
+        }
+      });
+      markersRef.current = [];
+    }
+  };
+
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop =
         chatContainerRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    console.log("Component mounted");
+    const initTimeout = setTimeout(() => {
+      initMap();
+    }, 1000); // Give DOM time to properly mount
+
+    // Add initial bot message
+    setMessages([
+      {
+        text: "Hello! I'm your travel assistant. Tell me your place to visit and for how many days you're planning your trip.",
+        sender: "bot",
+        suggestions: { days: [] },
+      },
+    ]);
+
+    return () => {
+      console.log("Component unmounting");
+      clearTimeout(initTimeout);
+      cleanupMap();
+      if (scriptRef.current && scriptRef.current.parentNode) {
+        scriptRef.current.parentNode.removeChild(scriptRef.current);
+        scriptRef.current = null;
+      }
+      setMapLoaded(false);
+    };
+  }, []);
 
   const renderSuggestions = (suggestions) => {
     if (!suggestions?.days?.length) return null;
@@ -338,23 +439,6 @@ export default function TravelBot() {
     ));
   };
 
-    const handleNewChat = () => {
-      setMessages([]);
-      setInput("");
-      if (!mapLoaded) {
-        setMapLoaded(false);
-        cleanupMap();
-        initMap();
-      } else {
-        markersRef.current.forEach((marker) => {
-          if (marker && typeof marker.remove === "function") {
-            marker.remove();
-          }
-        });
-        markersRef.current = [];
-      }
-    };
-
   return (
     <div className="flex flex-col md:flex-row gap-4 h-full max-w-5xl mx-auto p-4">
       <Card className="w-full shadow-lg">
@@ -379,7 +463,7 @@ export default function TravelBot() {
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="p-0">
+        <CardContent  className="p-0">
           <ScrollArea className="h-[400px] p-4">
             <div ref={chatContainerRef} className="space-y-4">
               {messages.map((message, index) => (

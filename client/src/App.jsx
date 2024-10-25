@@ -3,7 +3,7 @@ import { Route } from 'react-router-dom'
 import './App.css'
 import LandingPage from './pages/landing-page'
 import { Routes } from 'react-router-dom'
-import { TravelBot } from './pages/travel-bot';
+import TravelBot from './pages/travel-bot'
 
 function App() {
   return (
