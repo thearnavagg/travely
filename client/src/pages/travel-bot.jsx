@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { MessageCircle, Send, Map, Loader2 } from "lucide-react";
+import { MessageCircle, Send, Map, Loader2, RefreshCw } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -13,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-export function TravelBot() {
+export default function TravelBot() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +28,8 @@ export function TravelBot() {
   const scriptRef = useRef(null);
 
   const cleanupMap = () => {
+    setMapLoaded(false);
+    setMapInitialized(false);
     if (mapRef.current) {
       markersRef.current.forEach((marker) => {
         if (marker && typeof marker.remove === "function") {
@@ -53,79 +55,78 @@ export function TravelBot() {
         parent.appendChild(newContainer);
       }
     }
+  };
 
-    setMapInitialized(false);
+  const loadMapScript = () => {
+    return new Promise((resolve, reject) => {
+      if (window.mappls) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src =
+        "https://apis.mappls.com/advancedmaps/api/" +
+        process.env.VITE_MAPPLS_API_KEY +
+        "/map_sdk?layer=vector&v=3.0";
+      script.async = true;
+      script.defer = true;
+
+      script.onload = () => {
+        const checkMapplsLoaded = setInterval(() => {
+          if (window.mappls) {
+            clearInterval(checkMapplsLoaded);
+            resolve();
+          }
+        }, 100);
+
+        setTimeout(() => {
+          clearInterval(checkMapplsLoaded);
+          reject(new Error("Timeout waiting for mappls to load"));
+        }, 10000);
+      };
+
+      script.onerror = reject;
+
+      document.head.appendChild(script);
+      scriptRef.current = script;
+    });
+  };
+
+  const initMap = async () => {
+    try {
+      setMapLoaded(false);
+      await loadMapScript();
+
+      const container = document.getElementById(mapContainerId.current);
+      if (!container) {
+        throw new Error("Map container not found");
+      }
+
+      container.style.width = "100%";
+      container.style.height = "100%";
+      container.style.minHeight = "400px";
+
+      if (!mapRef.current) {
+        const map = new window.mappls.Map(mapContainerId.current, {
+          center: [28.6139, 77.209],
+          zoom: 12,
+          search: false,
+          zoomControl: true,
+          location: true,
+        });
+
+        mapRef.current = map;
+        setMapInitialized(true);
+      }
+      setMapLoaded(true);
+    } catch (error) {
+      console.error("Error initializing map:", error);
+      setMapLoaded(false);
+    }
   };
 
   useEffect(() => {
-    const loadMapScript = () => {
-      return new Promise((resolve, reject) => {
-        if (window.mappls) {
-          resolve();
-          return;
-        }
-
-        const script = document.createElement("script");
-        script.src =
-          "https://apis.mappls.com/advancedmaps/api/" +
-          import.meta.env.VITE_MAPPLS_API_KEY +
-          "/map_sdk?layer=vector&v=3.0";
-        script.async = true;
-        script.defer = true;
-
-        script.onload = () => {
-          const checkMapplsLoaded = setInterval(() => {
-            if (window.mappls) {
-              clearInterval(checkMapplsLoaded);
-              resolve();
-            }
-          }, 100);
-
-          setTimeout(() => {
-            clearInterval(checkMapplsLoaded);
-            reject(new Error("Timeout waiting for mappls to load"));
-          }, 10000);
-        };
-
-        script.onerror = reject;
-
-        document.head.appendChild(script);
-        scriptRef.current = script;
-      });
-    };
-
-    const initMap = async () => {
-      try {
-        await loadMapScript();
-
-        const container = document.getElementById(mapContainerId.current);
-        if (!container) {
-          throw new Error("Map container not found");
-        }
-
-        container.style.width = "100%";
-        container.style.height = "100%";
-        container.style.minHeight = "400px";
-
-        if (!mapRef.current) {
-          const map = new window.mappls.Map(mapContainerId.current, {
-            center: [28.6139, 77.209],
-            zoom: 12,
-            search: false,
-            zoomControl: true,
-            location: true,
-          });
-
-          mapRef.current = map;
-          setMapInitialized(true);
-          setMapLoaded(true);
-        }
-      } catch (error) {
-        console.error("Error initializing map:", error);
-        setMapLoaded(false);
-      }
-    };
-
     initMap();
 
     return () => {
@@ -214,7 +215,7 @@ export function TravelBot() {
 
   const generateResponse = async (userMessage) => {
     try {
-      const response = await fetch("http://127.0.0.1:8000/chat/suggestions/", {
+      const response = await fetch("/chat/suggestions/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -337,6 +338,23 @@ export function TravelBot() {
     ));
   };
 
+    const handleNewChat = () => {
+      setMessages([]);
+      setInput("");
+      if (!mapLoaded) {
+        setMapLoaded(false);
+        cleanupMap();
+        initMap();
+      } else {
+        markersRef.current.forEach((marker) => {
+          if (marker && typeof marker.remove === "function") {
+            marker.remove();
+          }
+        });
+        markersRef.current = [];
+      }
+    };
+
   return (
     <div className="flex flex-col md:flex-row gap-4 h-full max-w-5xl mx-auto p-4">
       <Card className="w-full shadow-lg">
@@ -349,6 +367,15 @@ export function TravelBot() {
                 Loading Map...
               </Badge>
             )}
+            <Button
+              onClick={handleNewChat}
+              variant="secondary"
+              size="sm"
+              className="ml-auto"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              New Chat
+            </Button>
           </CardTitle>
         </CardHeader>
 
@@ -442,5 +469,3 @@ export function TravelBot() {
     </div>
   );
 }
-
-export default TravelBot;
