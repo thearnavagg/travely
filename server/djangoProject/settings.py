@@ -10,7 +10,7 @@ SECRET_KEY = 'aia$)s(%!s%(b!_$9n%)!cl788)0vio2@!fy&sn_bp)^o_&oms'
 
 ROOT_URLCONF = 'djangoProject.urls'
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.vercel.app']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
