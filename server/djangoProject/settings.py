@@ -1,16 +1,19 @@
 import os
 from datetime import timedelta
 from decouple import config
+from dotenv import load_dotenv
 
-OPENAI_API_KEY = config('OPENAI_API_KEY')
+SECRET_KEY = os.getenv("SECRET_KEY", config("SECRET_KEY"))
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-SECRET_KEY = 'aia$)s(%!s%(b!_$9n%)!cl788)0vio2@!fy&sn_bp)^o_&oms'
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", config("OPENAI_API_KEY"))
 
 ROOT_URLCONF = 'djangoProject.urls'
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.vercel.app']
+
+WSGI_APPLICATION = 'api.wsgi.app'
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
@@ -62,10 +65,10 @@ REST_FRAMEWORK = {
     ),
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
 ]
+
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -90,7 +93,7 @@ DATABASES = {
 
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=20),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
