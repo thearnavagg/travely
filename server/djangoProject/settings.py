@@ -13,7 +13,7 @@ ROOT_URLCONF = 'djangoProject.urls'
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.vercel.app']
 
-WSGI_APPLICATION = 'api.wsgi.app'
+WSGI_APPLICATION = 'djangoProject.wsgi.application'
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
@@ -64,6 +64,12 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://itstravely.vercel.app",
+]
 
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.vercel\.app$",
