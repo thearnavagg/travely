@@ -97,7 +97,7 @@ export default function TravelBot() {
       script.onload = () => {
         console.log("Script loaded, waiting for mappls object...");
         let attempts = 0;
-        const maxAttempts = 50; 
+        const maxAttempts = 50;
 
         const checkMapplsLoaded = setInterval(() => {
           attempts++;
@@ -207,12 +207,36 @@ export default function TravelBot() {
       const bounds = new window.mappls.LatLngBounds();
 
       const markerColors = [
-        "#FF5733", "#33FF57", "#3357FF", "#FF33F1", "#33FFF1",
-        "#F1FF33", "#F4A460", "#FA8072", "#FFD700", "#DDA0DD",
-        "#E6E6FA", "#FFF0F5", "#FF69B4", "#BA55D3", "#9370DB",
-        "#7B68EE", "#6A5ACD", "#483D8B", "#BC8F8F", "#D2691E",
-        "#FFB6C1", "#D8BFD8", "#DCDCDC", "#B0C4DE", "#5F9EA0",
-        "#4682B4", "#6495ED", "#00CED1", "#20B2AA", "#3CB371"
+        "#FF5733",
+        "#33FF57",
+        "#3357FF",
+        "#FF33F1",
+        "#33FFF1",
+        "#F1FF33",
+        "#F4A460",
+        "#FA8072",
+        "#FFD700",
+        "#DDA0DD",
+        "#E6E6FA",
+        "#FFF0F5",
+        "#FF69B4",
+        "#BA55D3",
+        "#9370DB",
+        "#7B68EE",
+        "#6A5ACD",
+        "#483D8B",
+        "#BC8F8F",
+        "#D2691E",
+        "#FFB6C1",
+        "#D8BFD8",
+        "#DCDCDC",
+        "#B0C4DE",
+        "#5F9EA0",
+        "#4682B4",
+        "#6495ED",
+        "#00CED1",
+        "#20B2AA",
+        "#3CB371",
       ];
 
       suggestions.days.forEach((day, dayIndex) => {
@@ -266,14 +290,15 @@ export default function TravelBot() {
 
   const generateResponse = async (userMessage) => {
     try {
-      const response = await fetch("/chat/suggestions/", {
+      const apiUrl = new URL(
+        "/chat/suggestions/",
+        import.meta.env.VITE_API_URL
+      );
+
+      const response = await fetch(apiUrl.toString(), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: userMessage,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMessage }),
       });
 
       if (!response.ok) {
@@ -463,7 +488,7 @@ export default function TravelBot() {
           </CardTitle>
         </CardHeader>
 
-        <CardContent  className="p-0">
+        <CardContent className="p-0">
           <ScrollArea className="h-[400px] p-4">
             <div ref={chatContainerRef} className="space-y-4">
               {messages.map((message, index) => (

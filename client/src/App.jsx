@@ -1,17 +1,28 @@
 import { useState } from 'react'
-import { Route } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import './App.css'
 import LandingPage from './pages/landing-page'
-import { Routes } from 'react-router-dom'
 import TravelBot from './pages/travel-bot'
+
+const router = createBrowserRouter([
+  {
+    children: [
+      {
+        path: "/",
+        element: <LandingPage/>,
+      },
+      {
+        path: "/travelbot",
+        element: <TravelBot/>,
+      },
+    ],
+  },
+]);
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage/>} />
-      <Route path="/travelbot" element={<TravelBot/>} />
-    </Routes>
+    <RouterProvider router={router}/>
   );
 }
 
-export default App
+export default App;
