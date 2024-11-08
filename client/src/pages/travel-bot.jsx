@@ -178,6 +178,28 @@ export default function TravelBot() {
     }
   };
 
+    const renderSuggestions = (suggestions) => {
+      if (!suggestions || suggestions.length === 0) return null;
+
+      return (
+        <div className="suggestions">
+          {suggestions.map((suggestion, index) => (
+            <button
+              key={index}
+              onClick={() => handleSuggestionClick(suggestion)}
+              className="suggestion-button"
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      );
+    };
+
+    const handleSuggestionClick = (suggestion) => {
+      setInput(suggestion);
+    };
+
   const handleNewChat = () => {
     setMessages([
       {
