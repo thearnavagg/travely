@@ -288,54 +288,63 @@ export default function TravelBot() {
     }
   };
 
-  const generateResponse = async (userMessage) => {
-    try {
-      const apiUrl = new URL(
-        "/chat/suggestions/",
-        import.meta.env.VITE_API_URL
-      );
+const generateResponse = async (userMessage) => {
+  try {
+    const apiUrl = new URL("/chat/suggestions/", import.meta.env.VITE_API_URL);
 
-      const response = await fetch(apiUrl.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage }),
-      });
+    const response = await fetch(apiUrl.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: userMessage }),
+    });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
+    if (response.status === 504) {
+      throw new Error("504 Gateway Timeout");
+    }
 
-      const data = await response.json();
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
 
-      if (!data || typeof data.text !== "string") {
-        throw new Error("Invalid response format");
-      }
+    const data = await response.json();
 
+    if (!data || typeof data.text !== "string") {
+      throw new Error("Invalid response format");
+    }
+
+    return {
+      text: data.text,
+      suggestions: data.suggestions || { days: [] },
+    };
+  } catch (error) {
+    console.error("Error in generateResponse:", error);
+
+    if (error.message.includes("504 Gateway Timeout")) {
       return {
-        text: data.text,
-        suggestions: data.suggestions || { days: [] },
-      };
-    } catch (error) {
-      console.error("Error in generateResponse:", error);
-
-      if (error.message.includes("Failed to fetch")) {
-        return {
-          text: "Unable to connect to the suggestions service. Please check your internet connection and try again.",
-          suggestions: { days: [] },
-        };
-      } else if (error.message.includes("Invalid response format")) {
-        return {
-          text: "Received invalid data from the server. Please try again.",
-          suggestions: { days: [] },
-        };
-      }
-
-      return {
-        text: "Sorry, I encountered an error. Please try again.",
+        text: "The server took too long to respond. Please try again in a few moments.",
         suggestions: { days: [] },
       };
     }
-  };
+
+    if (error.message.includes("Failed to fetch")) {
+      return {
+        text: "Unable to connect to the suggestions service. Please check your internet connection and try again.",
+        suggestions: { days: [] },
+      };
+    } else if (error.message.includes("Invalid response format")) {
+      return {
+        text: "Received invalid data from the server. Please try again.",
+        suggestions: { days: [] },
+      };
+    }
+
+    return {
+      text: "Sorry, I encountered an error. Please try again.",
+      suggestions: { days: [] },
+    };
+  }
+};
+
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
