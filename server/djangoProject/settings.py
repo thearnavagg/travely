@@ -33,7 +33,6 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'djangoProject.middleware.CorsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -78,10 +77,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.vercel\.app$",
 ]
 
-CORS_ORIGIN_ALLOW_ALL = True
-CORS_ALLOW_CREDENTIALS = False
-
-CORS_ALLOW_HEADERS = ['*']
+CORS_ALLOW_CREDENTIALS = True
 
 DATABASES = {
     'default': {
