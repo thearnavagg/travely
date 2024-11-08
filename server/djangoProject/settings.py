@@ -11,7 +11,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", config("OPENAI_API_KEY"))
 
 ROOT_URLCONF = 'djangoProject.urls'
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.vercel.app']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'itstravelybackend.vercel.app', 'itstravely.vercel.app']
 
 WSGI_APPLICATION = 'djangoProject.wsgi.application'
 
