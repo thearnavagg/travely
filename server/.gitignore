@@ -2,3 +2,4 @@
 /.idea/
 *env*
 .vercel
+zappa_settings.json
