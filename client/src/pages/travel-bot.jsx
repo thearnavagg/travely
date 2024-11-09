@@ -20,6 +20,7 @@ export default function TravelBot() {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
   const [mapError, setMapError] = useState(null);
+  
   const chatContainerRef = useRef(null);
   const mapRef = useRef(null);
   const mapContainerId = useRef(
@@ -152,6 +153,7 @@ export default function TravelBot() {
             search: false,
             zoomControl: true,
             location: true,
+            fullscreenControl: false,
           });
 
           map.on("load", () => {

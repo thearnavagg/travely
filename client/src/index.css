@@ -64,3 +64,6 @@
     @apply bg-background text-foreground;
   }
 }
+.mappls-fullscreen {
+  @apply fixed left-0 top-0 w-full h-full z-[9999] transition-all duration-300 ease-in-out;
+}
