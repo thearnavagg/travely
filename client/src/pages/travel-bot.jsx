@@ -290,7 +290,7 @@ export default function TravelBot() {
 
 const generateResponse = async (userMessage) => {
   try {
-    const apiUrl = new URL("/chat/suggestions/", import.meta.env.VITE_API_URL);
+    const apiUrl = `${import.meta.env.VITE_API_URL}/chat/suggestions/`;
 
     const response = await fetch(apiUrl.toString(), {
       method: "POST",
